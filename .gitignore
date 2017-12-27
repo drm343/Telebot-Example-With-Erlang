@@ -12,3 +12,4 @@ rel/example_project
 _rel
 ebin
 my_bot.d
+rel/bot.config

@@ -16,7 +16,7 @@
 -module(my_bot_command).
 -behaviour(gen_server).
 
--export([start_link/0, stop/0]).
+-export([start_link/1, stop/0]).
 -export([init/1, handle_call/3, handle_cast/2,
         handle_info/2]).
 %%% 尚未實作的 2 個函數，不實作也不影響使用，但如果需要升級 app，則需要實作
@@ -28,20 +28,15 @@
 %%% terminate/2]).
 
 
-%% state 這個 record 會儲存 bot 的名稱跟 token，因為直接抓回傳資料可能會發生
-%% bot 名稱不同而無法發出訊息或程式掛掉的情況，所以需要自己手動儲存
--record(state, {name, token}).
+-include("telegram_bot.hrl").
 
 
 %% 讓 supervisor 用來連結 server 用的函數，完成後會 callback 執行這個模組內的
 %% init 函數。
-start_link() ->
-    BotName = <<"MyBotName">>,
-    BotToken = <<"Telegram:Token">>,
-    State = #state{name = BotName, token = BotToken},
-    pe4kin:launch_bot(BotName, BotToken, #{receiver => true}),
-    pe4kin_receiver:subscribe(BotName, ?MODULE),
-    pe4kin_receiver:start_http_poll(BotName, #{limit=>100, timeout=>60}),
+start_link(State) ->
+    pe4kin:launch_bot(State#state.name, State#state.token, #{receiver => true}),
+    pe4kin_receiver:subscribe(State#state.name, ?MODULE),
+    pe4kin_receiver:start_http_poll(State#state.name, #{limit=>100, timeout=>60}),
     gen_server:start_link({local, ?MODULE}, ?MODULE, [State], []).
 
 
