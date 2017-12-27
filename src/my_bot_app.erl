@@ -6,7 +6,7 @@
 
 
 start(_Type, _Args) ->
-  my_bot_sup:start_link().
+    my_bot_sup:start_link().
 
 stop(_State) ->
-  ok.
+    ok.
