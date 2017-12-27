@@ -34,9 +34,7 @@
 %% 讓 supervisor 用來連結 server 用的函數，完成後會 callback 執行這個模組內的
 %% init 函數。
 start_link(State) ->
-    pe4kin:launch_bot(State#state.name, State#state.token, #{receiver => true}),
     pe4kin_receiver:subscribe(State#state.name, ?MODULE),
-    pe4kin_receiver:start_http_poll(State#state.name, #{limit=>100, timeout=>60}),
     gen_server:start_link({local, ?MODULE}, ?MODULE, [State], []).
 
 
@@ -58,7 +56,7 @@ handle_call(_, _, State) ->
 %%
 %% 處理非群組中發 /start command 給 bot 的情況，handle_info 沒有進一步處理
 %% Request，所以要在這段再拆出自己要的資料來用。
-handle_cast({{<<"/start">>, _, true, _}, Message, ChatId}, State) ->
+handle_cast({bot_message, true, <<"/start">>, true, Message, ChatId}, State) ->
     % 從 dictionary 中取出發訊息者的 First Name，否則就當成匿名者。
     From = maps:get(<<"first_name">>, maps:get(<<"from">>, Message, #{}), <<"Anonumous">>),
     % 記得要把訊息處理成 unicode 的 binary 格式，否則中文可能會出錯。
@@ -67,13 +65,13 @@ handle_cast({{<<"/start">>, _, true, _}, Message, ChatId}, State) ->
     {ok, _} = pe4kin:send_message(State#state.name, #{chat_id => ChatId, text => ResponseText}),
     {noreply, State};
 %% 處理群組中的使用者發 /start command 給 bot 的情況。
-handle_cast({{<<"/start">>, _, false, _}, Message, ChatId}, State) ->
+handle_cast({bot_message, true, <<"/start">>, false, Message, ChatId}, State) ->
     From = maps:get(<<"first_name">>, maps:get(<<"from">>, Message, #{}), <<"Anonumous">>),
     ResponseText = unicode:characters_to_binary(["Hello, 群組中的 ", From]),
     {ok, _} = pe4kin:send_message(State#state.name, #{chat_id => ChatId, text => ResponseText}),
     {noreply, State};
 %% 處理使用者發 /macross command 給 bot 的情況，不分群組或個人。
-handle_cast({{<<"/macross">>, _, _, _}, Message, ChatId}, State) ->
+handle_cast({bot_message, true, <<"/macross">>, _, Message, ChatId}, State) ->
     From = maps:get(<<"first_name">>, maps:get(<<"from">>, Message, #{}), <<"Anonumous">>),
     HeartEmoji = pe4kin_emoji:name_to_char('heart'),
     ResponseText = unicode:characters_to_binary([From, HeartEmoji, " Macross! "]),
@@ -86,8 +84,21 @@ handle_cast({{<<"/macross">>, _, _, _}, Message, ChatId}, State) ->
 %% pe4kin_update 是 pe4kin 會轉發過來的訊息類型，除非有處理 pe4kin 以外的 server
 %% 轉發過來的訊息，不然只要處理 pe4kin_update 就夠了。
 handle_info({pe4kin_update, _, Update}, State) ->
+    % 只處理 text 類型的訊息
     #{<<"message">> := #{<<"chat">> := #{<<"id">> := ChatId}} = Message} = Update,
     text = pe4kin_types:message_type(Message),
-    Request = pe4kin_types:message_command(State#state.name, Message),
-    gen_server:cast(?MODULE, {Request, Message, ChatId}), % 把訊息整理後再次轉發給 command server 根據分類處理。
-    {noreply, State}.
+    case pe4kin_types:is_bot_command(Message) of
+        true ->
+            {Command, _, Is_Group, _} = pe4kin_types:message_command(State#state.name, Message),
+            BotMessage = #bot_message{
+                            is_command = true,
+                            command = Command,
+                            is_group = Is_Group,
+                            message = Message,
+                            chat_id = ChatId
+                           },
+            gen_server:cast(?MODULE, BotMessage), % 把訊息整理後再次轉發給 command server 根據分類處理。
+            {noreply, State};
+        false ->
+            {noreply, State}
+    end.

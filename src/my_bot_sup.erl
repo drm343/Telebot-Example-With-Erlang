@@ -16,5 +16,5 @@ init([State]) ->
                     shutdown => brutal_kill,
                     type => worker,
                     modules => [my_bot_command]}],
-    % 在 5 秒內 restart 超過 1 次，整個程式會死亡，避免無限回圈
-    {ok, {{one_for_one, 1, 5}, ChildSpecs}}.
+    % 在 5 秒內 restart 超過 3 次，整個程式會死亡，避免無限回圈
+    {ok, {{one_for_one, 3, 5}, ChildSpecs}}.

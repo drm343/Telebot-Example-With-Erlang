@@ -14,6 +14,8 @@ start(_Type, _Args) ->
     BotName = unicode:characters_to_binary(Name),
     BotToken = unicode:characters_to_binary(Token),
     State = #state{name = BotName, token = BotToken},
+    pe4kin:launch_bot(State#state.name, State#state.token, #{receiver => true}),
+    pe4kin_receiver:start_http_poll(State#state.name, #{limit=>100, timeout=>60}),
     my_bot_sup:start_link(State).
 
 stop(_State) ->
